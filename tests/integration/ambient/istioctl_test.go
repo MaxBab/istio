@@ -27,7 +27,6 @@ import (
 	"istio.io/istio/istioctl/pkg/writer/ztunnel/configdump"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/test/framework"
-	"istio.io/istio/pkg/test/framework/components/istio"
 	"istio.io/istio/pkg/test/framework/components/istioctl"
 	kubetest "istio.io/istio/pkg/test/kube"
 	"istio.io/istio/pkg/test/util/assert"
@@ -38,9 +37,12 @@ func TestZtunnelConfig(t *testing.T) {
 		Run(func(t framework.TestContext) {
 			// Test setup
 			istioCtl := istioctl.NewOrFail(t, istioctl.Config{})
-			istioCfg := istio.DefaultConfigOrFail(t, t)
 			g := NewWithT(t)
-			ztunnelPods, err := kubetest.NewPodFetch(t.AllClusters()[0], istioCfg.SystemNamespace, "app=ztunnel")()
+			ztunnelNS, err := locateDaemonsetNS(t, "ztunnel")
+			if err != nil {
+				t.Fatalf("Failed to locate ztunnel daemonset namespace: %v", err)
+			}
+			ztunnelPods, err := kubetest.NewPodFetch(t.AllClusters()[0], ztunnelNS, "app=ztunnel")()
 			assert.NoError(t, err)
 			podName, err := getPodName(ztunnelPods)
 			if err != nil {
@@ -48,7 +50,7 @@ func TestZtunnelConfig(t *testing.T) {
 			}
 
 			args := []string{
-				"zc", "all", podName, "-o", "json",
+				"zc", "all", podName, "--namespace", ztunnelNS, "-o", "json",
 			}
 			var zDumpAll configdump.ZtunnelDump
 			out, _ := istioCtl.InvokeOrFail(t, args)
@@ -62,7 +64,7 @@ func TestZtunnelConfig(t *testing.T) {
 
 			var zDump configdump.ZtunnelDump
 			args = []string{
-				"zc", "services", podName, "-o", "json",
+				"zc", "services", podName, "--namespace", ztunnelNS, "-o", "json",
 			}
 			out, _ = istioCtl.InvokeOrFail(t, args)
 			err = unmarshalListOrMap([]byte(out), &zDump.Services)
@@ -70,7 +72,7 @@ func TestZtunnelConfig(t *testing.T) {
 			g.Expect(zDump.Services).To(Not(BeNil()))
 
 			args = []string{
-				"zc", "workloads", podName, "-o", "json",
+				"zc", "workloads", podName, "--namespace", ztunnelNS, "-o", "json",
 			}
 			out, _ = istioCtl.InvokeOrFail(t, args)
 			err = unmarshalListOrMap([]byte(out), &zDump.Workloads)
@@ -78,7 +80,7 @@ func TestZtunnelConfig(t *testing.T) {
 			g.Expect(zDump.Workloads).To(Not(BeNil()))
 
 			args = []string{
-				"zc", "policies", podName, "-o", "json",
+				"zc", "policies", podName, "--namespace", ztunnelNS, "-o", "json",
 			}
 			out, _ = istioCtl.InvokeOrFail(t, args)
 			err = unmarshalListOrMap([]byte(out), &zDump.Policies)
@@ -86,7 +88,7 @@ func TestZtunnelConfig(t *testing.T) {
 			g.Expect(zDump.Policies).To(Not(BeNil()))
 
 			args = []string{
-				"zc", "certificates", podName, "-o", "json",
+				"zc", "certificates", podName, "--namespace", ztunnelNS, "-o", "json",
 			}
 			out, _ = istioCtl.InvokeOrFail(t, args)
 			err = unmarshalListOrMap([]byte(out), &zDump.Certificates)
